@@ -18,16 +18,11 @@ st.set_page_config(
 )
 
 NOTION_VERSION = "2022-06-28"
-CRM_DB_ID = "40fb8514-337d-4550-b899-743383a02169"
+CRM_DB_ID      = "40fb8514-337d-4550-b899-743383a02169"
+DASHBOARD_DB_ID = "ad90d1fd-7f41-400b-97bc-3098faa335a5"
 MARKETING_DB_ID = "7abdb6fc-eae3-43de-afd5-71252ab60f0e"
 ROUTEUR_WEBHOOK = "https://hook.eu1.make.com/5hbyls7ztgpvc76avtx06h3gfpbi4u2o"
 
-KPI_PAGES = {
-    "Cabinets convertis": "38489703-f7d5-8186-a458-cba7fa97a178",
-    "Dossiers archivés":  "38489703-f7d5-8126-bafa-c0a522f9d094",
-    "Prospects actifs":   "38489703-f7d5-8191-a3c7-c26c48492d32",
-    "Total pipeline CRM": "38489703-f7d5-814d-9d6e-c02cf354b121",
-}
 KPI_ICONS = {
     "Cabinets convertis": "🎉",
     "Dossiers archivés":  "📁",
@@ -62,28 +57,35 @@ def notion_headers(token):
 
 @st.cache_data(ttl=60)
 def get_kpi_values(token):
-    results = {}
-    for name, page_id in KPI_PAGES.items():
-        try:
-            r = requests.get(
-                f"https://api.notion.com/v1/pages/{page_id}",
-                headers=notion_headers(token),
-                timeout=5,
-            )
-            if r.status_code == 200:
-                props = r.json().get("properties", {})
-                valeur = props.get("Valeur", {}).get("rich_text", [{}])
-                valeur = valeur[0].get("plain_text", "0") if valeur else "0"
-                semaine = props.get("Semaine", {}).get("rich_text", [{}])
-                semaine = semaine[0].get("plain_text", "") if semaine else ""
-                sel = props.get("Statut", {}).get("select")
-                statut = sel["name"] if sel else ""
-                results[name] = {"valeur": valeur, "semaine": semaine, "statut": statut}
-            else:
-                results[name] = {"valeur": "—", "semaine": "", "statut": "Erreur"}
-        except Exception:
-            results[name] = {"valeur": "—", "semaine": "", "statut": "Erreur"}
-    return results
+    """Query la DB Dashboard pour récupérer les KPIs."""
+    try:
+        r = requests.post(
+            f"https://api.notion.com/v1/databases/{DASHBOARD_DB_ID}/query",
+            headers=notion_headers(token),
+            json={"page_size": 10},
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return {}
+        pages = r.json().get("results", [])
+        results = {}
+        for page in pages:
+            props = page.get("properties", {})
+            # Titre = propriété Métrique
+            titre_list = props.get("Métrique", {}).get("title", [])
+            titre = titre_list[0].get("plain_text", "") if titre_list else ""
+            if not titre:
+                continue
+            valeur_list = props.get("Valeur", {}).get("rich_text", [])
+            valeur = valeur_list[0].get("plain_text", "0") if valeur_list else "0"
+            semaine_list = props.get("Semaine", {}).get("rich_text", [])
+            semaine = semaine_list[0].get("plain_text", "") if semaine_list else ""
+            sel = props.get("Statut", {}).get("select")
+            statut = sel["name"] if sel else ""
+            results[titre] = {"valeur": valeur, "semaine": semaine, "statut": statut}
+        return results
+    except Exception:
+        return {}
 
 @st.cache_data(ttl=60)
 def get_crm_prospects(token):
@@ -147,9 +149,8 @@ with st.sidebar:
         st.success("✅ Notion connecté")
     else:
         st.error("❌ Token Notion manquant")
-        st.caption("Ajouter `notion.token` dans les secrets Streamlit")
 
-    st.caption(f"Dernière actualisation : {datetime.now().strftime('%H:%M:%S')}")
+    st.caption(f"Actualisation : {datetime.now().strftime('%H:%M:%S')}")
     if st.button("🔄 Rafraîchir", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -162,23 +163,25 @@ if page == "📊 KPIs":
     st.caption("Mis à jour automatiquement chaque matin à 8h par Make · Rafraîchissement manuel disponible")
 
     if not token:
-        st.warning("Configure le token Notion dans les secrets pour voir les vraies données.")
-        col1, col2, col3, col4 = st.columns(4)
-        for col, (name, icon) in zip([col1, col2, col3, col4], KPI_ICONS.items()):
-            with col:
-                st.metric(f"{icon} {name}", "—")
+        st.warning("Configure le token Notion dans les secrets Streamlit.")
     else:
         kpis = get_kpi_values(token)
-        col1, col2, col3, col4 = st.columns(4)
-        for col, (name, data) in zip([col1, col2, col3, col4], kpis.items()):
-            icon = KPI_ICONS.get(name, "📌")
-            with col:
-                st.metric(
-                    label=f"{icon} {name}",
-                    value=data["valeur"],
-                    delta=f"{data['semaine']} — {data['statut']}",
-                    delta_color="normal" if data["statut"] == "OK" else "inverse",
-                )
+
+        if not kpis:
+            st.warning("Impossible de lire le Dashboard Notion. Vérifie que l'intégration 'Audit RGPD SMD' est connectée à la DB Dashboard Pilotage SMD.")
+        else:
+            cols = st.columns(4)
+            ordre = ["Cabinets convertis", "Dossiers archivés", "Prospects actifs", "Total pipeline CRM"]
+            for col, nom in zip(cols, ordre):
+                data = kpis.get(nom, {"valeur": "—", "semaine": "", "statut": ""})
+                icon = KPI_ICONS.get(nom, "📌")
+                with col:
+                    st.metric(
+                        label=f"{icon} {nom}",
+                        value=data["valeur"],
+                        delta=f"{data['semaine']} — {data['statut']}" if data["semaine"] else data["statut"],
+                        delta_color="normal" if data["statut"] == "OK" else "inverse",
+                    )
 
         st.divider()
         st.subheader("Répartition CRM par statut")
@@ -186,13 +189,14 @@ if page == "📊 KPIs":
         statuts_count = {}
         for p in prospects:
             s = extract_text(p.get("properties", {}).get("Statut", {}))
-            statuts_count[s] = statuts_count.get(s, 0) + 1
+            if s:
+                statuts_count[s] = statuts_count.get(s, 0) + 1
 
         if statuts_count:
             cols_s = st.columns(len(statuts_count))
             for col, (statut, count) in zip(cols_s, sorted(statuts_count.items())):
                 with col:
-                    st.metric(statut or "—", count)
+                    st.metric(statut, count)
         else:
             st.info("Aucune donnée CRM disponible.")
 
@@ -223,11 +227,11 @@ elif page == "📇 CRM Pipeline":
             for p in prospects:
                 props = p.get("properties", {})
                 cabinet = extract_text(props.get("Cabinet", props.get("Name", props.get("Nom", {}))))
-                contact = extract_text(props.get("Contact", {}))
-                email = extract_text(props.get("Email", {}))
-                ville = extract_text(props.get("Ville", {}))
-                taille = extract_text(props.get("Taille", {}))
-                statut = extract_text(props.get("Statut", {}))
+                contact = extract_text(props.get("Contact", props.get("Contact principal", {})))
+                email   = extract_text(props.get("Email", {}))
+                ville   = extract_text(props.get("Ville", {}))
+                taille  = extract_text(props.get("Taille", {}))
+                statut  = extract_text(props.get("Statut", {}))
                 if statut not in filtre:
                     continue
                 if search and search.lower() not in (cabinet + contact + ville).lower():
@@ -321,10 +325,10 @@ elif page == "📢 Marketing":
                     if t:
                         titre = t
                         break
-                angle = extract_text(props.get("Angle", {}))
+                angle    = extract_text(props.get("Angle", {}))
                 audience = extract_text(props.get("Audience", {}))
-                created = item.get("created_time", "")[:10]
-                url = item.get("url", "")
+                created  = item.get("created_time", "")[:10]
+                url      = item.get("url", "")
                 with st.expander(f"📝 {titre or 'Sans titre'} — {created}"):
                     col1, col2 = st.columns(2)
                     with col1:
@@ -343,13 +347,13 @@ elif page == "⚙️ Système":
     st.title("⚙️ État du système")
 
     scenarios = {
-        "🔀 Routeur SMD":            {"id": 6258440, "hook": "...5hbyls7..."},
-        "🏢 Admin Convertir":         {"id": 6259845, "hook": "...kimneh2j..."},
-        "📁 Admin Archiver":          {"id": 6259927, "hook": "...buy5qft5..."},
-        "📧 Agent Commercial":        {"id": 6245020, "hook": "...7lgy38z..."},
-        "📢 Agent Marketing":         {"id": 6245203, "hook": "...ypu71qq..."},
-        "🔔 Alertes Erreurs":         {"id": 6260014, "hook": "...y1c2qms5..."},
-        "📊 Dashboard KPIs update":   {"id": 6260071, "hook": "daily 08:00"},
+        "🔀 Routeur SMD":           {"id": 6258440, "hook": "...5hbyls7..."},
+        "🏢 Admin Convertir":        {"id": 6259845, "hook": "...kimneh2j..."},
+        "📁 Admin Archiver":         {"id": 6259927, "hook": "...buy5qft5..."},
+        "📧 Agent Commercial":       {"id": 6245020, "hook": "...7lgy38z..."},
+        "📢 Agent Marketing":        {"id": 6245203, "hook": "...ypu71qq..."},
+        "🔔 Alertes Erreurs":        {"id": 6260014, "hook": "...y1c2qms5..."},
+        "📊 Dashboard KPIs update":  {"id": 6260071, "hook": "daily 08:00"},
     }
 
     make_key = get_make_api_key()
