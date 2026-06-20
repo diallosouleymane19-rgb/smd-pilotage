@@ -588,7 +588,7 @@ elif page == "🔬 Rapport IA":
                     },
                     json={
                         "model": ANTHROPIC_MODEL,
-                        "max_tokens": 4096,
+                        "max_tokens": 8192,
                         "system": sys_prompt,
                         "messages": [{"role": "user", "content": user_prompt}],
                     },
