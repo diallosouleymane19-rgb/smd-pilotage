@@ -24,11 +24,16 @@ MARKETING_DB_ID = "7abdb6fc-eae3-43de-afd5-71252ab60f0e"
 ROUTEUR_WEBHOOK = "https://hook.eu1.make.com/5hbyls7ztgpvc76avtx06h3gfpbi4u2o"
 
 KPI_ICONS = {
-    "Cabinets convertis": "🎉",
-    "Dossiers archivés":  "📁",
-    "Prospects actifs":   "✉️",
-    "Total pipeline CRM": "📊",
+    "Cabinets convertis":   "🎉",
+    "Dossiers archivés":    "📁",
+    "Prospects actifs":     "✉️",
+    "Total pipeline CRM":   "📊",
+    "Emails envoyés":       "📧",
+    "Relance programmée":   "🔁",
+    "CA potentiel pipeline": "💰",
 }
+
+PRIX_UNITAIRE = 270  # € par micro-audit AI Act
 
 # ─────────────────────────────────────────────
 # SECRETS
@@ -183,6 +188,53 @@ if page == "📊 KPIs":
                         delta_color="normal" if data["statut"] == "OK" else "inverse",
                     )
 
+        # ── Ligne 2 : nouvelles métriques campagne ──
+        ordre2 = ["Emails envoyés", "Relance programmée", "CA potentiel pipeline"]
+        kpis2_present = [k for k in ordre2 if k in kpis]
+        if kpis2_present:
+            cols2 = st.columns(len(kpis2_present))
+            for col, nom in zip(cols2, kpis2_present):
+                data = kpis[nom]
+                icon = KPI_ICONS.get(nom, "📌")
+                with col:
+                    st.metric(
+                        label=f"{icon} {nom}",
+                        value=data["valeur"],
+                        delta=f"{data['semaine']} — {data['statut']}" if data["semaine"] else data["statut"],
+                        delta_color="normal" if data["statut"] == "OK" else "inverse",
+                    )
+
+        st.divider()
+
+        # ── Performance commerciale ──
+        st.subheader("💰 Performance commerciale")
+        convertis_raw = kpis.get("Cabinets convertis", {}).get("valeur", "0")
+        prospects_raw = kpis.get("Prospects actifs", {}).get("valeur", "0")
+        try:
+            nb_convertis  = int(convertis_raw)
+            nb_prospects   = int(prospects_raw)
+            ca_encaisse    = nb_convertis * PRIX_UNITAIRE
+            ca_pipeline    = nb_prospects * PRIX_UNITAIRE
+            taux           = round((nb_convertis / nb_prospects) * 100, 1) if nb_prospects else 0
+        except (ValueError, ZeroDivisionError):
+            nb_convertis = nb_prospects = ca_encaisse = ca_pipeline = taux = 0
+
+        pc1, pc2, pc3, pc4 = st.columns(4)
+        with pc1:
+            st.metric("💶 CA encaissé", f"{ca_encaisse:,} €".replace(",", " "), delta=f"{nb_convertis} client(s)")
+        with pc2:
+            st.metric("🎯 Taux de conversion", f"{taux} %", delta=f"{nb_convertis}/{nb_prospects}")
+        with pc3:
+            st.metric("📈 CA pipeline potentiel", f"{ca_pipeline:,} €".replace(",", " "), delta=f"{nb_prospects} prospects")
+        with pc4:
+            reste = nb_prospects - nb_convertis
+            ca_reste = reste * PRIX_UNITAIRE
+            st.metric("🔮 CA restant atteignable", f"{ca_reste:,} €".replace(",", " "), delta=f"{reste} à convertir")
+
+        if nb_prospects > 0:
+            progress_val = min(nb_convertis / nb_prospects, 1.0)
+            st.progress(progress_val, text=f"Pipeline : {nb_convertis}/{nb_prospects} convertis ({taux}%)")
+
         st.divider()
         st.subheader("Répartition CRM par statut")
         prospects = get_crm_prospects(token)
@@ -193,8 +245,8 @@ if page == "📊 KPIs":
                 statuts_count[s] = statuts_count.get(s, 0) + 1
 
         if statuts_count:
-            cols_s = st.columns(len(statuts_count))
-            for col, (statut, count) in zip(cols_s, sorted(statuts_count.items())):
+            cols_s = st.columns(min(len(statuts_count), 6))
+            for col, (statut, count) in zip(cols_s, sorted(statuts_count.items(), key=lambda x: -x[1])):
                 with col:
                     st.metric(statut, count)
         else:
@@ -338,7 +390,7 @@ elif page == "📢 Marketing":
                         if audience:
                             st.markdown(f"**Audience :** {audience}")
                     if url:
-                        st.markdown(f"[Ouvrir dans Notion →]({url})")
+                        st.markdown(f"[Ouvrir dans Notion ->]({url})")
 
 # ─────────────────────────────────────────────
 # PAGE 5 — SYSTÈME
@@ -347,13 +399,14 @@ elif page == "⚙️ Système":
     st.title("⚙️ État du système")
 
     scenarios = {
-        "🔀 Routeur SMD":           {"id": 6258440, "hook": "...5hbyls7..."},
-        "🏢 Admin Convertir":        {"id": 6259845, "hook": "...kimneh2j..."},
-        "📁 Admin Archiver":         {"id": 6259927, "hook": "...buy5qft5..."},
-        "📧 Agent Commercial":       {"id": 6245020, "hook": "...7lgy38z..."},
-        "📢 Agent Marketing":        {"id": 6245203, "hook": "...ypu71qq..."},
-        "🔔 Alertes Erreurs":        {"id": 6260014, "hook": "...y1c2qms5..."},
-        "📊 Dashboard KPIs update":  {"id": 6260071, "hook": "daily 08:00"},
+        "🔀 Routeur SMD":             {"id": 6258440, "hook": "...5hbyls7..."},
+        "🏢 Admin Convertir":          {"id": 6259845, "hook": "...kimneh2j..."},
+        "📁 Admin Archiver":           {"id": 6259927, "hook": "...buy5qft5..."},
+        "📧 Agent Commercial":         {"id": 6245020, "hook": "...7lgy38z..."},
+        "📢 Agent Marketing":          {"id": 6245203, "hook": "...ypu71qq..."},
+        "🔔 Alertes Erreurs":          {"id": 6260014, "hook": "...y1c2qms5..."},
+        "📊 Dashboard KPIs update":    {"id": 6260071, "hook": "daily 08:00"},
+        "💳 Agent Pilote — Paiement":  {"id": 6266361, "hook": "...9m3mu4i5... (Stripe)"},
     }
 
     make_key = get_make_api_key()
