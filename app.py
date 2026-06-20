@@ -401,304 +401,468 @@ elif page == "📢 Marketing":
                         st.markdown(f"[Ouvrir dans Notion ->]({url})")
 
 # ─────────────────────────────────────────────
-# PAGE 5 — RAPPORT IA
 
+
+# ─────────────────────────────────────────────
+# PAGE 5 — RAPPORT IA
+# ─────────────────────────────────────────────
 elif page == "🔬 Rapport IA":
     import json as _json
 
-    st.title("🔬 Generateur de rapport IA")
-    st.caption("Saisir les reponses Tally -> Claude analyse -> rapport structure pret a envoyer au client")
-
     TALLY_URL = "https://tally.so/r/68VQyB"
-    st.info("Lien questionnaire client : " + TALLY_URL)
+    HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
     QUESTIONS = {
-        "Bloc A — Registre des traitements": [
-            ("A1", "Avez-vous un registre des traitements de donnees ?", "CRITIQUE"),
-            ("A2", "Avez-vous nomme un DPO ou referent RGPD ?", "IMPORTANTE"),
-            ("A3", "Vos employes sont-ils formes au RGPD ?", "IMPORTANTE"),
+        "Bloc A": [
+            ("A1", "Registre des traitements de donnees", "CRITIQUE"),
+            ("A2", "DPO ou referent RGPD nomme", "IMPORTANTE"),
+            ("A3", "Employes formes au RGPD", "IMPORTANTE"),
         ],
-        "Bloc B — Site web / Cookies": [
-            ("B1", "Avez-vous une politique de confidentialite sur votre site ?", "CRITIQUE"),
-            ("B2", "Avez-vous un bandeau cookies conforme ?", "CRITIQUE"),
-            ("B3", "Vos formulaires web ont-ils une case de consentement ?", "CRITIQUE"),
-            ("B4", "Votre site est-il securise en HTTPS ?", "IMPORTANTE"),
+        "Bloc B": [
+            ("B1", "Politique de confidentialite sur le site", "CRITIQUE"),
+            ("B2", "Bandeau cookies conforme", "CRITIQUE"),
+            ("B3", "Case de consentement sur les formulaires web", "CRITIQUE"),
+            ("B4", "Site securise HTTPS", "IMPORTANTE"),
         ],
-        "Bloc C — Securite": [
-            ("C1", "Vos donnees sont-elles sauvegardees regulierement ?", "CRITIQUE"),
-            ("C2", "Utilisez-vous des mots de passe forts et uniques ?", "IMPORTANTE"),
-            ("C3", "Avez-vous un antivirus/firewall actif ?", "IMPORTANTE"),
-            ("C4", "Avez-vous un plan en cas de violation de donnees ?", "CRITIQUE"),
+        "Bloc C": [
+            ("C1", "Sauvegardes regulieres des donnees", "CRITIQUE"),
+            ("C2", "Mots de passe forts et uniques", "IMPORTANTE"),
+            ("C3", "Antivirus et firewall actifs", "IMPORTANTE"),
+            ("C4", "Plan de gestion des violations de donnees", "CRITIQUE"),
         ],
-        "Bloc D — Sous-traitants": [
-            ("D1", "Avez-vous signe des DPA avec vos prestataires ?", "CRITIQUE"),
-            ("D2", "Vos prestataires sont-ils tous dans l'UE ou pays adequats ?", "CRITIQUE"),
-            ("D3", "Avez-vous une liste de vos sous-traitants ?", "IMPORTANTE"),
+        "Bloc D": [
+            ("D1", "DPA signes avec les prestataires", "CRITIQUE"),
+            ("D2", "Prestataires dans l'UE ou pays adequats", "CRITIQUE"),
+            ("D3", "Liste des sous-traitants tenue", "IMPORTANTE"),
         ],
-        "Bloc E — Droits des personnes": [
-            ("E1", "Pouvez-vous repondre a une demande d'acces aux donnees en 30 jours ?", "CRITIQUE"),
-            ("E2", "Pouvez-vous supprimer les donnees d'une personne sur demande ?", "CRITIQUE"),
+        "Bloc E": [
+            ("E1", "Reponse aux demandes d'acces en 30 jours", "CRITIQUE"),
+            ("E2", "Suppression de donnees sur demande possible", "CRITIQUE"),
         ],
-        "Bloc F — Email marketing": [
-            ("F1", "Avez-vous le consentement explicite pour vos emails marketing ?", "CRITIQUE"),
-            ("F2", "Proposez-vous un lien de desinscription dans chaque email ?", "CRITIQUE"),
+        "Bloc F": [
+            ("F1", "Consentement explicite pour emails marketing", "CRITIQUE"),
+            ("F2", "Lien de desinscription dans chaque email", "CRITIQUE"),
         ],
-        "Bloc G — EU AI Act": [
-            ("G1", "Utilisez-vous des outils d'IA dans votre activite ?", "INFORMATIF"),
-            ("G2", "Ces outils d'IA prennent-ils des decisions automatiques sur des personnes ?", "CRITIQUE"),
-            ("G3", "Informez-vous vos clients quand ils interagissent avec une IA ?", "IMPORTANTE"),
-            ("G4", "Avez-vous evalue les risques de vos outils d'IA ?", "CRITIQUE"),
+        "Bloc G": [
+            ("G1", "Utilisation d'outils d'IA dans l'activite", "INFORMATIF"),
+            ("G2", "Decisions automatiques sur des personnes par IA", "CRITIQUE"),
+            ("G3", "Information clients interactions avec IA", "IMPORTANTE"),
+            ("G4", "Evaluation des risques des outils d'IA", "CRITIQUE"),
         ],
     }
 
-    # ── 1. Informations client ────────────────────────────────
+    BLOC_META = {
+        "Bloc A": {"titre": "Registre des traitements", "max": 3},
+        "Bloc B": {"titre": "Site web / Cookies", "max": 4},
+        "Bloc C": {"titre": "Securite", "max": 4},
+        "Bloc D": {"titre": "Sous-traitants", "max": 3},
+        "Bloc E": {"titre": "Droits des personnes", "max": 2},
+        "Bloc F": {"titre": "Email marketing", "max": 2},
+        "Bloc G": {"titre": "EU AI Act", "max": 4},
+    }
+
+    # ────────────────────────────────────────
+    st.title("🔬 Rapport IA — RGPD + AI Act")
+    st.caption("Saisir les reponses Tally → analyse Claude → rapport PDF client")
+    st.info("Questionnaire client : " + TALLY_URL)
+
+    # 1. INFOS CLIENT
     st.subheader("1  Informations client")
     c1, c2 = st.columns(2)
     with c1:
-        client_nom     = st.text_input("Nom de l'entreprise *", placeholder="Cabinet Dupont")
-        client_contact = st.text_input("Nom du dirigeant", placeholder="Jean Dupont")
+        client_nom     = st.text_input("Nom entreprise *", placeholder="Cabinet Dupont")
+        client_contact = st.text_input("Dirigeant", placeholder="Jean Dupont")
     with c2:
-        client_email   = st.text_input("Email client *", placeholder="jean@dupont.fr")
+        client_email   = st.text_input("Email *", placeholder="jean@dupont.fr")
         client_secteur = st.text_input("Secteur", placeholder="Expertise comptable")
-    client_salaries = st.text_input("Nombre de salaries", placeholder="12")
+    client_salaries = st.text_input("Nb salaries", placeholder="12")
 
-    # ── 2. Reponses Tally ─────────────────────────────────────
-    st.subheader("2  Reponses du questionnaire Tally")
-    st.caption("Saisir les reponses recues dans Tally > Submissions")
-
+    # 2. REPONSES
+    st.subheader("2  Reponses Tally")
     reponses = {}
-    for bloc_titre, questions in QUESTIONS.items():
-        with st.expander(bloc_titre, expanded=True):
+    for bloc_k, questions in QUESTIONS.items():
+        with st.expander(bloc_k + " — " + BLOC_META[bloc_k]["titre"], expanded=True):
             cols_q = st.columns(2)
-            for idx, (code, question, niveau) in enumerate(questions):
-                badge = "CRITIQUE" if niveau == "CRITIQUE" else ("IMPORT." if niveau == "IMPORTANTE" else "INFO")
+            for idx, (code, label, niveau) in enumerate(questions):
+                badge = "🔴" if niveau == "CRITIQUE" else ("🟠" if niveau == "IMPORTANTE" else "🔵")
                 with cols_q[idx % 2]:
-                    rep = st.radio(
-                        f"[{badge}] {code} — {question}",
-                        ["OUI", "NON"],
-                        index=None,
-                        key="rep_" + code,
-                        horizontal=True,
-                    )
+                    rep = st.radio(badge + " " + code + " — " + label, ["OUI", "NON"],
+                                   index=None, key="rep_" + code, horizontal=True)
                     reponses[code] = rep
 
-    # ── Score en temps reel ───────────────────────────────────
+    # Score
     nb_rep   = sum(1 for v in reponses.values() if v is not None)
     score    = sum(1 for v in reponses.values() if v == "OUI")
-    crit_non = [c for bl, qs in QUESTIONS.items()
+    crit_non = [c for bk, qs in QUESTIONS.items()
                 for (c, _, niv) in qs if niv == "CRITIQUE" and reponses.get(c) == "NON"]
 
     if nb_rep > 0:
         st.divider()
-        st.subheader("Score en temps reel")
+        if score >= 20:   niv_lbl, niv_col = "EXCELLENT", "green"
+        elif score >= 14: niv_lbl, niv_col = "MOYEN", "orange"
+        elif score >= 8:  niv_lbl, niv_col = "INSUFFISANT", "red"
+        else:             niv_lbl, niv_col = "NON CONFORME", "red"
+
         m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("Score", str(score) + " / 22")
-        with m2:
-            st.metric("Repondus", str(nb_rep) + " / 22")
-        with m3:
-            if score >= 20:   niv_lbl = "EXCELLENT"
-            elif score >= 14: niv_lbl = "MOYEN"
-            elif score >= 8:  niv_lbl = "INSUFFISANT"
-            else:             niv_lbl = "NON CONFORME"
-            st.metric("Niveau", niv_lbl)
+        with m1: st.metric("Score global", str(score) + "/22")
+        with m2: st.metric("Repondus", str(nb_rep) + "/22")
+        with m3: st.metric("Niveau", niv_lbl)
         with m4:
-            if score >= 20:   up_prix = "150 EUR/mois"
-            elif score >= 14: up_prix = "1 500 EUR"
-            elif score >= 8:  up_prix = "2 500 EUR"
-            else:             up_prix = "4 000 EUR"
-            st.metric("Upsell", up_prix)
+            up = "150 EUR/mois" if score>=20 else ("1 500 EUR" if score>=14 else ("2 500 EUR" if score>=8 else "4 000 EUR"))
+            st.metric("Upsell", up)
+
+        if nb_rep >= 7:
+            st.markdown("**Scores par bloc :**")
+            bloc_cols = st.columns(7)
+            for i, (bk, meta) in enumerate(BLOC_META.items()):
+                sc_b = sum(1 for (c,_,__) in QUESTIONS[bk] if reponses.get(c) == "OUI")
+                mx_b = meta["max"]
+                with bloc_cols[i]:
+                    col_m = "normal" if sc_b == mx_b else ("inverse" if sc_b < mx_b // 2 else "off")
+                    st.metric(bk, str(sc_b) + "/" + str(mx_b), delta_color=col_m, delta="OK" if sc_b==mx_b else ("Lacunes" if sc_b>=mx_b//2 else "Critique"))
+
         if nb_rep == 22:
-            st.progress(score / 22, text=str(score) + "/22 (" + str(round(score / 22 * 100)) + "%)")
+            st.progress(score / 22, text=str(score) + "/22 (" + str(round(score/22*100)) + "%)")
         if crit_non:
             st.error("Points CRITIQUE non conformes : " + ", ".join(crit_non))
 
-    # ── 3. Generation IA ─────────────────────────────────────
+    # 3. GENERATION IA
     st.divider()
-    st.subheader("3  Analyse IA — Claude Sonnet")
-
+    st.subheader("3  Analyse IA — Claude Haiku (rapide)")
     anthropic_key = get_anthropic_key()
     if not anthropic_key:
-        st.warning("Cle API Anthropic manquante. Ajouter dans Streamlit Cloud > Secrets :\n[anthropic]\napi_key = \"sk-ant-...\"")
+        st.warning("Cle API Anthropic manquante dans les Secrets Streamlit.")
 
     can_gen = bool(client_nom and anthropic_key and nb_rep >= 20)
 
     if st.button("Generer l'analyse IA", type="primary", disabled=not can_gen, use_container_width=True):
-        lignes = []
-        for bt, qs in QUESTIONS.items():
-            lignes.append("\n--- " + bt + " ---")
-            for code, question, niveau in qs:
-                rv = reponses.get(code) or "Non repondu"
-                lignes.append("[" + code + "] (" + niveau + ") " + question + " : " + rv)
-        rep_txt = "\n".join(lignes)
+        # Construire le contexte compact
+        rep_lines = []
+        for bk, qs in QUESTIONS.items():
+            for code, label, niveau in qs:
+                rv = reponses.get(code) or "NR"
+                rep_lines.append(code + ":" + rv + " [" + niveau[:4] + "] " + label)
+        rep_compact = " | ".join(rep_lines)
 
+        sc_str = str(score) + "/22"
         if score >= 20:   niv_str = "EXCELLENT"
         elif score >= 14: niv_str = "MOYEN"
         elif score >= 8:  niv_str = "INSUFFISANT"
         else:             niv_str = "NON CONFORME"
 
-        sys_prompt = (
-            "Tu es un expert en conformite RGPD et EU AI Act. "
-            "Tu analyses des questionnaires d'audit pour SMD Global Consulting LLC. "
-            "Tu reponds UNIQUEMENT en JSON valide, sans texte avant ni apres."
+        bloc_scores = {}
+        for bk, qs in QUESTIONS.items():
+            sc_b = sum(1 for (c,_,__) in qs if reponses.get(c) == "OUI")
+            bloc_scores[bk] = str(sc_b) + "/" + str(BLOC_META[bk]["max"])
+
+        prompt_sys = "Tu es un expert RGPD et EU AI Act. Tu reponds UNIQUEMENT en JSON valide sans markdown."
+        prompt_usr = (
+            "Micro-audit RGPD+AI Act pour " + client_nom + " (" + (client_secteur or "secteur NC") +
+            ", " + (client_salaries or "?") + " sal.). Score: " + sc_str + " — " + niv_str + "." +
+            " Scores blocs: " + str(bloc_scores) + "." +
+            " Reponses: " + rep_compact + "." +
+            " Retourne ce JSON (CONCIS — max 50 mots par champ texte):" +
+            """
+{
+  "synthese": "3 phrases : niveau, points forts, action urgente.",
+  "risque_amende": "Montant max + article RGPD/AI Act applicable.",
+  "blocs": [
+    {"code": "A", "titre": "Registre", "score": 0, "max": 3,
+     "statut": "CONFORME|PARTIEL|NON CONFORME",
+     "lacune": "1 phrase si statut != CONFORME, sinon vide."}
+  ],
+  "recommandations": [
+    {"priorite": "CRITIQUE", "code": "A1", "action": "Verbe + action specifique (20 mots max)",
+     "delai": "0-30j", "article": "Art. XX RGPD"}
+  ],
+  "plan": [
+    {"ordre": 1, "phase": "0-30j", "action": "Action courte",
+     "responsable": "Dirigeant|Prestataire|Equipe IT",
+     "cout": "Gratuit|< 100 EUR|> 500 EUR", "kpi": "Mesure courte"}
+  ],
+  "upsell": "1 phrase de proposition commerciale SMD adaptee au score."
+}
+Regles: blocs dans l'ordre A-G avec scores calcules; min 5 recommandations CRITIQUE en premier; plan couvre 0-30j, 30-90j, 90-180j; articles reels."""
         )
 
-        user_prompt = (
-            "Analyse ce micro-audit RGPD + AI Act.\n\n"
-            "CLIENT :\n"
-            "- Entreprise : " + client_nom + "\n"
-            "- Dirigeant : " + (client_contact or "Non renseigne") + "\n"
-            "- Secteur : " + (client_secteur or "Non renseigne") + "\n"
-            "- Salaries : " + (client_salaries or "Non renseigne") + "\n\n"
-            "SCORE : " + str(score) + "/22 — Niveau : " + niv_str + "\n\n"
-            "REPONSES :\n" + rep_txt + "\n\n"
-            "Genere ce JSON :\n"
-            "{\n"
-            '  "synthese_executive": "Paragraphe 100 mots : niveau conformite, risques, action prioritaire.",\n'
-            '  "risque_amende": "Risque amende CNIL/AI Act : montants reels, articles. 2-3 phrases.",\n'
-            '  "analyse_blocs": {\n'
-            '    "A": {"score": 0, "max": 3, "titre": "Registre des traitements", "analyse": "2-3 phrases."},\n'
-            '    "B": {"score": 0, "max": 4, "titre": "Site web / Cookies", "analyse": "2-3 phrases."},\n'
-            '    "C": {"score": 0, "max": 4, "titre": "Securite", "analyse": "2-3 phrases."},\n'
-            '    "D": {"score": 0, "max": 3, "titre": "Sous-traitants", "analyse": "2-3 phrases."},\n'
-            '    "E": {"score": 0, "max": 2, "titre": "Droits des personnes", "analyse": "2-3 phrases."},\n'
-            '    "F": {"score": 0, "max": 2, "titre": "Email marketing", "analyse": "2-3 phrases."},\n'
-            '    "G": {"score": 0, "max": 4, "titre": "EU AI Act", "analyse": "2-3 phrases."}\n'
-            "  },\n"
-            '  "recommandations": [\n'
-            '    {"priorite": "CRITIQUE", "code_question": "A1", "action": "Action concrete.", "pourquoi": "Risque legal.", "delai": "0-30 jours", "article": "Art. 30 RGPD"}\n'
-            "  ],\n"
-            '  "plan_action": [\n'
-            '    {"ordre": 1, "action": "Action", "responsable": "Qui", "delai": "0-30j", "ressource": "Outil", "kpi": "Mesure"}\n'
-            "  ],\n"
-            '  "opportunite_commerciale": "Proposition mission SMD adaptee au score."\n'
-            "}\n\n"
-            "Regles : scores calcules d'apres les OUI, min 5 recommandations CRITIQUE en premier, "
-            "plan couvrant 0-30j/30-90j/90-180j, articles de loi reels."
-        )
-
-        with st.spinner("Claude Sonnet analyse... (30-60 secondes)"):
+        with st.spinner("Claude Haiku analyse... (10-20 secondes)"):
             try:
                 r = requests.post(
                     ANTHROPIC_API_URL,
-                    headers={
-                        "x-api-key": anthropic_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": ANTHROPIC_MODEL,
-                        "max_tokens": 8192,
-                        "system": sys_prompt,
-                        "messages": [{"role": "user", "content": user_prompt}],
-                    },
-                    timeout=90,
+                    headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01",
+                             "content-type": "application/json"},
+                    json={"model": HAIKU_MODEL, "max_tokens": 4096,
+                          "system": prompt_sys,
+                          "messages": [{"role": "user", "content": prompt_usr}]},
+                    timeout=60,
                 )
                 if r.status_code != 200:
                     st.error("Erreur API HTTP " + str(r.status_code) + " : " + r.text[:300])
                 else:
                     raw = r.json()["content"][0]["text"].strip()
                     if raw.startswith("```"):
-                        parts = raw.split("```")
-                        raw = parts[1]
-                        if raw.startswith("json"):
-                            raw = raw[4:]
-                    st.session_state["ia_result"]  = _json.loads(raw)
-                    st.session_state["ia_nom"]     = client_nom
-                    st.session_state["ia_score"]   = score
-                    st.session_state["ia_niveau"]  = niv_str
-                    st.success("Analyse generee avec succes !")
+                        raw = raw.split("```")[1]
+                        if raw.startswith("json"): raw = raw[4:]
+                    data = _json.loads(raw)
+                    st.session_state["ia"] = {"data": data, "nom": client_nom,
+                        "email": client_email, "contact": client_contact,
+                        "secteur": client_secteur, "salaries": client_salaries,
+                        "score": score, "niveau": niv_str, "reponses": dict(reponses),
+                        "bloc_scores": bloc_scores}
+                    st.success("Analyse generee !")
                     st.rerun()
             except _json.JSONDecodeError as e:
                 st.error("JSON invalide : " + str(e))
-                st.code(raw[:500])
+                st.code(raw[:600])
             except Exception as e:
                 st.error("Erreur : " + str(e))
 
     if not can_gen:
-        missing = []
-        if not client_nom:     missing.append("nom de l'entreprise")
-        if not anthropic_key:  missing.append("cle API Anthropic")
-        if nb_rep < 20:        missing.append(str(20 - nb_rep) + " reponses manquantes")
-        if missing:
-            st.caption("Manquant : " + " | ".join(missing))
+        miss = []
+        if not client_nom:    miss.append("nom entreprise")
+        if not anthropic_key: miss.append("cle API")
+        if nb_rep < 20:       miss.append(str(20-nb_rep) + " reponses manquantes")
+        if miss: st.caption("Manquant : " + " | ".join(miss))
 
-    # ── Affichage resultats ───────────────────────────────────
-    if "ia_result" in st.session_state:
-        res = st.session_state["ia_result"]
-        nom = st.session_state.get("ia_nom", client_nom)
-        sc  = st.session_state.get("ia_score", score)
-        nv  = st.session_state.get("ia_niveau", "")
+    # ── AFFICHAGE RESULTATS ────────────────────────────────────
+    if "ia" in st.session_state:
+        s      = st.session_state["ia"]
+        data   = s["data"]
+        nom    = s["nom"]
+        sc     = s["score"]
+        nv     = s["niveau"]
+        blocs  = data.get("blocs", [])
+        recos  = data.get("recommandations", [])
+        plan   = data.get("plan", [])
 
         st.divider()
-        st.subheader("Analyse — " + nom + " — " + str(sc) + "/22 — " + nv)
+        st.subheader("Rapport — " + nom + " — " + str(sc) + "/22 — " + nv)
+
+        # KPIs globaux
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1: st.metric("Score", str(sc) + "/22")
+        with k2: st.metric("Niveau", nv)
+        with k3:
+            n_crit = sum(1 for r in recos if r.get("priorite") == "CRITIQUE")
+            st.metric("Points CRITIQUE", str(n_crit))
+        with k4:
+            n_ok = sum(1 for b in blocs if b.get("statut") == "CONFORME")
+            st.metric("Blocs conformes", str(n_ok) + "/7")
+        with k5:
+            up_m = "150 EUR/mois" if sc>=20 else ("1 500 EUR" if sc>=14 else ("2 500 EUR" if sc>=8 else "4 000 EUR"))
+            st.metric("Mission upsell", up_m)
 
         tab1, tab2, tab3, tab4, tab5 = st.tabs(
-            ["Synthese", "Par bloc", "Recommandations", "Plan d'action", "Commercial"]
-        )
+            ["Synthese", "Blocs", "Recommandations", "Plan d'action", "PDF client"])
 
         with tab1:
-            st.markdown("**Synthese executive**")
-            st.text_area("Copier dans le rapport Word", value=res.get("synthese_executive", ""),
-                         height=180, key="edit_synthese")
-            st.markdown("**Risque amende estime**")
-            st.text_area(" ", value=res.get("risque_amende", ""), height=110, key="edit_amende")
+            st.info(data.get("synthese", ""))
+            st.error("Risque amende : " + data.get("risque_amende", ""))
 
         with tab2:
-            for lettre, data in res.get("analyse_blocs", {}).items():
-                sb  = data.get("score", 0)
-                mb  = data.get("max", 1)
-                tb  = data.get("titre", "Bloc " + lettre)
-                pct = sb / mb if mb else 0
-                col = "green" if pct == 1.0 else ("orange" if pct >= 0.5 else "red")
-                st.markdown("**Bloc " + lettre + " — " + tb + "** : :" + col + "[" + str(sb) + "/" + str(mb) + "]")
-                st.text_area("analyse_" + lettre, value=data.get("analyse", ""),
-                             height=90, key="edit_b_" + lettre, label_visibility="collapsed")
+            rows_b = []
+            for b in blocs:
+                statut = b.get("statut", "")
+                rows_b.append({
+                    "Bloc": b.get("code", ""), "Theme": b.get("titre", ""),
+                    "Score": str(b.get("score", "")) + "/" + str(b.get("max", "")),
+                    "Statut": statut, "Lacune principale": b.get("lacune", "")
+                })
+            st.dataframe(rows_b, use_container_width=True, hide_index=True,
+                column_config={
+                    "Statut": st.column_config.TextColumn(width="medium"),
+                    "Lacune principale": st.column_config.TextColumn(width="large"),
+                })
 
         with tab3:
-            for i, reco in enumerate(res.get("recommandations", []), 1):
-                prio  = reco.get("priorite", "")
-                col   = "red" if prio == "CRITIQUE" else ("orange" if prio == "IMPORTANTE" else "blue")
-                st.markdown(str(i) + ". :" + col + "[" + prio + "]" + " `" + reco.get("code_question", "") + "` — " + reco.get("action", ""))
-                ca, cb = st.columns(2)
-                with ca:
-                    st.caption("Pourquoi : " + reco.get("pourquoi", ""))
-                with cb:
-                    st.caption("Delai : " + reco.get("delai", "") + "  |  " + reco.get("article", ""))
-                st.markdown("---")
+            rows_r = []
+            for r in recos:
+                rows_r.append({
+                    "Priorite": r.get("priorite", ""), "Code": r.get("code", ""),
+                    "Action": r.get("action", ""), "Delai": r.get("delai", ""),
+                    "Article": r.get("article", "")
+                })
+            st.dataframe(rows_r, use_container_width=True, hide_index=True,
+                column_config={
+                    "Priorite": st.column_config.TextColumn(width="small"),
+                    "Code": st.column_config.TextColumn(width="small"),
+                    "Action": st.column_config.TextColumn(width="large"),
+                })
 
         with tab4:
-            plan = res.get("plan_action", [])
-            if plan:
-                st.dataframe(
-                    [{"#": p.get("ordre", ""), "Action": p.get("action", ""),
-                      "Responsable": p.get("responsable", ""), "Delai": p.get("delai", ""),
-                      "Ressource": p.get("ressource", ""), "KPI": p.get("kpi", "")}
-                     for p in plan],
-                    use_container_width=True, hide_index=True,
-                )
+            rows_p = []
+            for p in plan:
+                rows_p.append({
+                    "#": p.get("ordre", ""), "Phase": p.get("phase", ""),
+                    "Action": p.get("action", ""), "Responsable": p.get("responsable", ""),
+                    "Cout": p.get("cout", ""), "KPI": p.get("kpi", "")
+                })
+            st.dataframe(rows_p, use_container_width=True, hide_index=True)
 
         with tab5:
-            st.success("Proposition commerciale generee par l'IA")
-            st.text_area("A inclure dans l'email de livraison",
-                         value=res.get("opportunite_commerciale", ""), height=180, key="edit_comm")
-            if sc >= 20:
-                st.info("Proposer : Veille reglementaire — 150 EUR/mois")
-            elif sc >= 14:
-                st.warning("Proposer : Mission conformite complete — 1 500 EUR")
-            elif sc >= 8:
-                st.error("Proposer : Mission urgente 6 mois — 2 500 EUR")
-            else:
-                st.error("Proposer : Mission complete + DPO externalise — 4 000 EUR")
+            st.markdown("**Rapport PDF a remettre au client**")
+            st.caption(data.get("upsell", ""))
+
+            from datetime import date as _date
+
+            # Generation HTML rapport client
+            def statut_color(st_val):
+                return "#1B7C3D" if st_val == "CONFORME" else ("#C45A00" if st_val == "PARTIEL" else "#B00020")
+
+            def prio_color(p):
+                return "#B00020" if p == "CRITIQUE" else ("#C45A00" if p == "IMPORTANTE" else "#1A2B5E")
+
+            blocs_html = ""
+            for b in blocs:
+                sc_b = b.get("score", 0); mx_b = b.get("max", 1)
+                pct = round(sc_b / mx_b * 100) if mx_b else 0
+                st_v = b.get("statut", "")
+                lacune = b.get("lacune", "")
+                blocs_html += (
+                    "<tr>"
+                    "<td style='font-weight:bold'>" + b.get("code","") + " — " + b.get("titre","") + "</td>"
+                    "<td style='text-align:center'>" + str(sc_b) + "/" + str(mx_b) + "</td>"
+                    "<td><div style='background:#eee;border-radius:4px;height:12px'>"
+                    "<div style='background:" + statut_color(st_v) + ";width:" + str(pct) + "%;height:12px;border-radius:4px'></div></div></td>"
+                    "<td style='color:" + statut_color(st_v) + ";font-weight:bold'>" + st_v + "</td>"
+                    "<td style='font-size:11px;color:#555'>" + lacune + "</td>"
+                    "</tr>"
+                )
+
+            recos_html = ""
+            for rc in recos:
+                recos_html += (
+                    "<tr>"
+                    "<td style='color:" + prio_color(rc.get("priorite","")) + ";font-weight:bold;font-size:11px'>" + rc.get("priorite","") + "</td>"
+                    "<td style='font-weight:bold;color:#1A2B5E'>" + rc.get("code","") + "</td>"
+                    "<td>" + rc.get("action","") + "</td>"
+                    "<td style='font-size:11px'>" + rc.get("delai","") + "</td>"
+                    "<td style='font-size:10px;color:#666'>" + rc.get("article","") + "</td>"
+                    "</tr>"
+                )
+
+            plan_html = ""
+            for pl in plan:
+                plan_html += (
+                    "<tr>"
+                    "<td style='font-weight:bold;color:#1A2B5E'>" + pl.get("phase","") + "</td>"
+                    "<td>" + pl.get("action","") + "</td>"
+                    "<td>" + pl.get("responsable","") + "</td>"
+                    "<td style='font-size:11px'>" + pl.get("cout","") + "</td>"
+                    "<td style='font-size:11px;color:#555'>" + pl.get("kpi","") + "</td>"
+                    "</tr>"
+                )
+
+            if sc >= 20: niv_color, niv_bg = "#1B7C3D", "#E8F5EE"
+            elif sc >= 14: niv_color, niv_bg = "#C45A00", "#FFF3E8"
+            elif sc >= 8: niv_color, niv_bg = "#B00020", "#FFE8EB"
+            else: niv_color, niv_bg = "#B00020", "#FFE8EB"
+
+            html_report = """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<title>Micro-audit RGPD + AI Act — """ + nom + """</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;padding:0;color:#222;font-size:12px}
+  .header{background:#1A2B5E;color:white;padding:24px 32px;display:flex;justify-content:space-between;align-items:center}
+  .header h1{margin:0;font-size:18px;font-weight:bold}
+  .header .sub{font-size:11px;opacity:.8;margin-top:4px}
+  .cover{padding:32px;background:#f8f9fc;border-bottom:3px solid #C9A84C}
+  .score-box{display:inline-block;background:""" + niv_bg + """;border:2px solid """ + niv_color + """;border-radius:8px;padding:16px 32px;text-align:center;margin:16px 0}
+  .score-num{font-size:48px;font-weight:bold;color:""" + niv_color + """;line-height:1}
+  .score-lbl{font-size:14px;color:""" + niv_color + """;font-weight:bold;margin-top:4px}
+  .client-info{margin:16px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .info-item{background:white;padding:8px 12px;border-radius:4px;border-left:3px solid #1A2B5E}
+  .info-label{font-size:10px;color:#666;text-transform:uppercase}
+  .info-val{font-weight:bold;margin-top:2px}
+  .synthese{background:white;border-left:4px solid #1A2B5E;padding:12px 16px;margin:16px 0;border-radius:0 4px 4px 0}
+  .amende-box{background:#FFE8EB;border-left:4px solid #B00020;padding:10px 16px;margin:8px 0;border-radius:0 4px 4px 0;font-size:11px}
+  section{padding:20px 32px;border-bottom:1px solid #eee}
+  h2{color:#1A2B5E;font-size:14px;border-bottom:2px solid #C9A84C;padding-bottom:4px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{background:#1A2B5E;color:white;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase}
+  td{padding:6px 10px;border-bottom:1px solid #eee}
+  tr:nth-child(even) td{background:#f9f9f9}
+  .footer{background:#1A2B5E;color:white;padding:12px 32px;font-size:10px;display:flex;justify-content:space-between}
+  .upsell{background:#FDF8EE;border:2px solid #C9A84C;border-radius:6px;padding:14px 20px;margin:12px 0}
+  @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style></head><body>
+
+<div class="header">
+  <div>
+    <div class="header h1">SMD GLOBAL CONSULTING LLC</div>
+    <div class="sub">Rapport Micro-audit RGPD + AI Act — Confidentiel</div>
+  </div>
+  <div style="text-align:right;font-size:11px">""" + _date.today().strftime("%d/%m/%Y") + """<br>Ref. SMD-""" + _date.today().strftime("%Y%m%d") + "-" + nom[:3].upper() + """</div>
+</div>
+
+<div class="cover">
+  <div class="score-box">
+    <div class="score-num">""" + str(sc) + """/22</div>
+    <div class="score-lbl">""" + nv + """</div>
+  </div>
+  <div class="client-info">
+    <div class="info-item"><div class="info-label">Entreprise</div><div class="info-val">""" + nom + """</div></div>
+    <div class="info-item"><div class="info-label">Secteur</div><div class="info-val">""" + (s.get("secteur") or "—") + """</div></div>
+    <div class="info-item"><div class="info-label">Dirigeant</div><div class="info-val">""" + (s.get("contact") or "—") + """</div></div>
+    <div class="info-item"><div class="info-label">Effectif</div><div class="info-val">""" + (s.get("salaries") or "—") + """ salaries</div></div>
+  </div>
+  <div class="synthese">""" + data.get("synthese", "") + """</div>
+  <div class="amende-box"><strong>Risque d'amende :</strong> """ + data.get("risque_amende", "") + """</div>
+</div>
+
+<section>
+<h2>Tableau de bord par bloc</h2>
+<table>
+<thead><tr><th>Bloc</th><th>Score</th><th style="width:120px">Avancement</th><th>Statut</th><th>Lacune principale</th></tr></thead>
+<tbody>""" + blocs_html + """</tbody>
+</table>
+</section>
+
+<section>
+<h2>Recommandations prioritaires</h2>
+<table>
+<thead><tr><th>Priorite</th><th>Ref.</th><th>Action a mener</th><th>Delai</th><th>Reference legale</th></tr></thead>
+<tbody>""" + recos_html + """</tbody>
+</table>
+</section>
+
+<section>
+<h2>Plan d'action</h2>
+<table>
+<thead><tr><th>Phase</th><th>Action</th><th>Responsable</th><th>Cout</th><th>KPI de suivi</th></tr></thead>
+<tbody>""" + plan_html + """</tbody>
+</table>
+</section>
+
+<section>
+<h2>Pour aller plus loin</h2>
+<div class="upsell">""" + data.get("upsell", "") + """</div>
+<p style="font-size:11px;color:#555">SMD Global Consulting LLC accompagne les entreprises dans leur mise en conformite RGPD et EU AI Act.
+Contact : diallosouleymane19@gmail.com</p>
+</section>
+
+<div class="footer">
+  <span>SMD Global Consulting LLC — diallosouleymane19@gmail.com</span>
+  <span>Rapport genere le """ + _date.today().strftime("%d/%m/%Y") + """ — Confidentiel</span>
+</div>
+</body></html>"""
+
+            fname = "Rapport_RGPD_AIAct_" + nom.replace(" ", "_") + "_" + _date.today().strftime("%Y%m%d") + ".html"
+            st.download_button(
+                label="Telecharger le rapport PDF (HTML → imprimer en PDF)",
+                data=html_report.encode("utf-8"),
+                file_name=fname,
+                mime="text/html",
+                use_container_width=True,
+                type="primary",
+            )
+            st.caption("Ouvrir le fichier HTML → Ctrl+P (ou Cmd+P) → Enregistrer en PDF → remettre au client.")
 
         st.divider()
-        if st.button("Effacer et recommencer", type="secondary"):
-            for k in ["ia_result", "ia_nom", "ia_score", "ia_niveau"]:
-                st.session_state.pop(k, None)
+        if st.button("Effacer et nouveau client", type="secondary"):
+            st.session_state.pop("ia", None)
             st.rerun()
 
-
-# ─────────────────────────────────────────────
 # PAGE 6 — SYSTEME
 # ─────────────────────────────────────────────
 elif page == "⚙️ Système":
