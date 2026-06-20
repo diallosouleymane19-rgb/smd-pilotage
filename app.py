@@ -1,0 +1,394 @@
+"""
+Dashboard Pilotage SMD — Application Streamlit
+SMD Global Consulting LLC
+"""
+
+import streamlit as st
+import requests
+from datetime import datetime
+
+# ─────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────
+st.set_page_config(
+    page_title="SMD Pilotage",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+NOTION_VERSION = "2022-06-28"
+CRM_DB_ID = "40fb8514-337d-4550-b899-743383a02169"
+MARKETING_DB_ID = "7abdb6fc-eae3-43de-afd5-71252ab60f0e"
+ROUTEUR_WEBHOOK = "https://hook.eu1.make.com/5hbyls7ztgpvc76avtx06h3gfpbi4u2o"
+
+KPI_PAGES = {
+    "Cabinets convertis": "38489703-f7d5-8186-a458-cba7fa97a178",
+    "Dossiers archivés":  "38489703-f7d5-8126-bafa-c0a522f9d094",
+    "Prospects actifs":   "38489703-f7d5-8191-a3c7-c26c48492d32",
+    "Total pipeline CRM": "38489703-f7d5-814d-9d6e-c02cf354b121",
+}
+KPI_ICONS = {
+    "Cabinets convertis": "🎉",
+    "Dossiers archivés":  "📁",
+    "Prospects actifs":   "✉️",
+    "Total pipeline CRM": "📊",
+}
+
+# ─────────────────────────────────────────────
+# SECRETS
+# ─────────────────────────────────────────────
+def get_notion_token():
+    try:
+        return st.secrets["notion"]["token"]
+    except Exception:
+        return None
+
+def get_make_api_key():
+    try:
+        return st.secrets["make"]["api_key"]
+    except Exception:
+        return None
+
+# ─────────────────────────────────────────────
+# NOTION HELPERS
+# ─────────────────────────────────────────────
+def notion_headers(token):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+@st.cache_data(ttl=60)
+def get_kpi_values(token):
+    results = {}
+    for name, page_id in KPI_PAGES.items():
+        try:
+            r = requests.get(
+                f"https://api.notion.com/v1/pages/{page_id}",
+                headers=notion_headers(token),
+                timeout=5,
+            )
+            if r.status_code == 200:
+                props = r.json().get("properties", {})
+                valeur = props.get("Valeur", {}).get("rich_text", [{}])
+                valeur = valeur[0].get("plain_text", "0") if valeur else "0"
+                semaine = props.get("Semaine", {}).get("rich_text", [{}])
+                semaine = semaine[0].get("plain_text", "") if semaine else ""
+                sel = props.get("Statut", {}).get("select")
+                statut = sel["name"] if sel else ""
+                results[name] = {"valeur": valeur, "semaine": semaine, "statut": statut}
+            else:
+                results[name] = {"valeur": "—", "semaine": "", "statut": "Erreur"}
+        except Exception:
+            results[name] = {"valeur": "—", "semaine": "", "statut": "Erreur"}
+    return results
+
+@st.cache_data(ttl=60)
+def get_crm_prospects(token):
+    try:
+        r = requests.post(
+            f"https://api.notion.com/v1/databases/{CRM_DB_ID}/query",
+            headers=notion_headers(token),
+            json={"page_size": 50},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return r.json().get("results", [])
+    except Exception:
+        pass
+    return []
+
+@st.cache_data(ttl=60)
+def get_marketing_content(token):
+    try:
+        r = requests.post(
+            f"https://api.notion.com/v1/databases/{MARKETING_DB_ID}/query",
+            headers=notion_headers(token),
+            json={"page_size": 20},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return r.json().get("results", [])
+    except Exception:
+        pass
+    return []
+
+def extract_text(prop):
+    if not prop:
+        return ""
+    for key in ("title", "rich_text"):
+        if key in prop and prop[key]:
+            return prop[key][0].get("plain_text", "")
+    if "select" in prop and prop["select"]:
+        return prop["select"].get("name", "")
+    if "email" in prop:
+        return prop["email"] or ""
+    return ""
+
+# ─────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## 📊 SMD Pilotage")
+    st.caption("SMD Global Consulting LLC")
+    st.divider()
+
+    page = st.radio(
+        "Navigation",
+        ["📊 KPIs", "📇 CRM Pipeline", "🤖 Envoyer instruction", "📢 Marketing", "⚙️ Système"],
+        label_visibility="collapsed",
+    )
+
+    st.divider()
+    token = get_notion_token()
+    if token:
+        st.success("✅ Notion connecté")
+    else:
+        st.error("❌ Token Notion manquant")
+        st.caption("Ajouter `notion.token` dans les secrets Streamlit")
+
+    st.caption(f"Dernière actualisation : {datetime.now().strftime('%H:%M:%S')}")
+    if st.button("🔄 Rafraîchir", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+# ─────────────────────────────────────────────
+# PAGE 1 — KPIs
+# ─────────────────────────────────────────────
+if page == "📊 KPIs":
+    st.title("📊 Dashboard KPIs SMD")
+    st.caption("Mis à jour automatiquement chaque matin à 8h par Make · Rafraîchissement manuel disponible")
+
+    if not token:
+        st.warning("Configure le token Notion dans les secrets pour voir les vraies données.")
+        col1, col2, col3, col4 = st.columns(4)
+        for col, (name, icon) in zip([col1, col2, col3, col4], KPI_ICONS.items()):
+            with col:
+                st.metric(f"{icon} {name}", "—")
+    else:
+        kpis = get_kpi_values(token)
+        col1, col2, col3, col4 = st.columns(4)
+        for col, (name, data) in zip([col1, col2, col3, col4], kpis.items()):
+            icon = KPI_ICONS.get(name, "📌")
+            with col:
+                st.metric(
+                    label=f"{icon} {name}",
+                    value=data["valeur"],
+                    delta=f"{data['semaine']} — {data['statut']}",
+                    delta_color="normal" if data["statut"] == "OK" else "inverse",
+                )
+
+        st.divider()
+        st.subheader("Répartition CRM par statut")
+        prospects = get_crm_prospects(token)
+        statuts_count = {}
+        for p in prospects:
+            s = extract_text(p.get("properties", {}).get("Statut", {}))
+            statuts_count[s] = statuts_count.get(s, 0) + 1
+
+        if statuts_count:
+            cols_s = st.columns(len(statuts_count))
+            for col, (statut, count) in zip(cols_s, sorted(statuts_count.items())):
+                with col:
+                    st.metric(statut or "—", count)
+        else:
+            st.info("Aucune donnée CRM disponible.")
+
+# ─────────────────────────────────────────────
+# PAGE 2 — CRM
+# ─────────────────────────────────────────────
+elif page == "📇 CRM Pipeline":
+    st.title("📇 CRM Prospects")
+
+    if not token:
+        st.warning("Token Notion requis.")
+    else:
+        prospects = get_crm_prospects(token)
+        if not prospects:
+            st.info("Aucun prospect dans le CRM.")
+        else:
+            all_statuts = sorted({
+                extract_text(p.get("properties", {}).get("Statut", {}))
+                for p in prospects
+            } - {""})
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                filtre = st.multiselect("Statut", all_statuts, default=all_statuts)
+            with col_f2:
+                search = st.text_input("🔍 Rechercher", placeholder="Cabinet, ville...")
+
+            rows = []
+            for p in prospects:
+                props = p.get("properties", {})
+                cabinet = extract_text(props.get("Cabinet", props.get("Name", props.get("Nom", {}))))
+                contact = extract_text(props.get("Contact", {}))
+                email = extract_text(props.get("Email", {}))
+                ville = extract_text(props.get("Ville", {}))
+                taille = extract_text(props.get("Taille", {}))
+                statut = extract_text(props.get("Statut", {}))
+                if statut not in filtre:
+                    continue
+                if search and search.lower() not in (cabinet + contact + ville).lower():
+                    continue
+                rows.append({"Cabinet": cabinet or "—", "Contact": contact or "—",
+                             "Email": email or "—", "Ville": ville or "—",
+                             "Taille": taille or "—", "Statut": statut or "—"})
+
+            if rows:
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+                st.caption(f"{len(rows)} prospect(s)")
+            else:
+                st.info("Aucun résultat.")
+
+# ─────────────────────────────────────────────
+# PAGE 3 — ROUTEUR
+# ─────────────────────────────────────────────
+elif page == "🤖 Envoyer instruction":
+    st.title("🤖 Routeur SMD")
+    st.caption("Tape une instruction en langage naturel — le Routeur la transmet au bon agent automatiquement")
+
+    with st.expander("💡 Exemples d'instructions"):
+        st.markdown("""
+**Admin — Convertir :**  `Converti le cabinet Ficadex`
+
+**Admin — Archiver :**  `Archive le cabinet Seleco, sans suite`
+
+**Commercial :**  `Prospecte le cabinet ABC à Lyon, contact Jean Martin, email jean@abc.fr, TPE spécialisé audit`
+
+**Marketing :**  `Crée un post LinkedIn sur les obligations RGPD pour les TPE, angle pratique, audience experts-comptables`
+        """)
+
+    instruction = st.text_area("Instruction", height=120, placeholder="Ex: Prospecte le cabinet Dupont Audit à Paris...")
+
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        send = st.button("🚀 Envoyer", type="primary", use_container_width=True, disabled=not instruction.strip())
+    with col2:
+        if st.button("🗑️ Effacer", use_container_width=True):
+            st.rerun()
+
+    if send and instruction.strip():
+        with st.spinner("Envoi en cours..."):
+            try:
+                r = requests.post(
+                    ROUTEUR_WEBHOOK,
+                    json={"instruction": instruction.strip()},
+                    timeout=20,
+                )
+                if r.status_code in (200, 201, 202, 204):
+                    st.success("✅ Instruction envoyée ! Attends 10-15 secondes puis rafraîchis le CRM.")
+                else:
+                    st.error(f"❌ HTTP {r.status_code} : {r.text[:200]}")
+            except requests.Timeout:
+                st.warning("⏱️ Timeout — Make traite l'instruction en arrière-plan. Vérifie le CRM dans un instant.")
+            except Exception as e:
+                st.error(f"❌ {e}")
+
+    st.divider()
+    st.markdown("""
+**Flux de traitement :**
+```
+Instruction → Routeur (Make) → Haiku → JSON structuré
+    → smd-dispatcher (Supabase Edge Function)
+        ├── admin/fiche_client  → Agent Admin Convertir
+        ├── admin/archiver      → Agent Admin Archiver
+        ├── commercial          → Agent Commercial (email + CRM)
+        └── marketing           → Agent Marketing (LinkedIn + Notion)
+```
+    """)
+
+# ─────────────────────────────────────────────
+# PAGE 4 — MARKETING
+# ─────────────────────────────────────────────
+elif page == "📢 Marketing":
+    st.title("📢 Contenus Marketing")
+
+    if not token:
+        st.warning("Token Notion requis.")
+    else:
+        contents = get_marketing_content(token)
+        if not contents:
+            st.info("Aucun contenu. Utilise l'onglet 'Envoyer instruction' avec une instruction Marketing.")
+        else:
+            st.caption(f"{len(contents)} contenu(s) généré(s)")
+            for item in contents:
+                props = item.get("properties", {})
+                titre = ""
+                for key in ("Sujet", "Titre", "Name", "title"):
+                    t = extract_text(props.get(key, {}))
+                    if t:
+                        titre = t
+                        break
+                angle = extract_text(props.get("Angle", {}))
+                audience = extract_text(props.get("Audience", {}))
+                created = item.get("created_time", "")[:10]
+                url = item.get("url", "")
+                with st.expander(f"📝 {titre or 'Sans titre'} — {created}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if angle:
+                            st.markdown(f"**Angle :** {angle}")
+                    with col2:
+                        if audience:
+                            st.markdown(f"**Audience :** {audience}")
+                    if url:
+                        st.markdown(f"[Ouvrir dans Notion →]({url})")
+
+# ─────────────────────────────────────────────
+# PAGE 5 — SYSTÈME
+# ─────────────────────────────────────────────
+elif page == "⚙️ Système":
+    st.title("⚙️ État du système")
+
+    scenarios = {
+        "🔀 Routeur SMD":            {"id": 6258440, "hook": "...5hbyls7..."},
+        "🏢 Admin Convertir":         {"id": 6259845, "hook": "...kimneh2j..."},
+        "📁 Admin Archiver":          {"id": 6259927, "hook": "...buy5qft5..."},
+        "📧 Agent Commercial":        {"id": 6245020, "hook": "...7lgy38z..."},
+        "📢 Agent Marketing":         {"id": 6245203, "hook": "...ypu71qq..."},
+        "🔔 Alertes Erreurs":         {"id": 6260014, "hook": "...y1c2qms5..."},
+        "📊 Dashboard KPIs update":   {"id": 6260071, "hook": "daily 08:00"},
+    }
+
+    make_key = get_make_api_key()
+    if not make_key:
+        st.info("Ajoute `make.api_key` dans les secrets pour voir le statut en temps réel.")
+
+    for name, info in scenarios.items():
+        col1, col2, col3 = st.columns([3, 1, 2])
+        with col1:
+            st.markdown(f"**{name}** — `#{info['id']}`")
+        with col2:
+            if make_key:
+                try:
+                    r = requests.get(
+                        f"https://eu1.make.com/api/v2/scenarios/{info['id']}",
+                        headers={"Authorization": f"Token {make_key}"},
+                        timeout=5,
+                    )
+                    if r.status_code == 200:
+                        active = r.json().get("scenario", {}).get("isActive", False)
+                        st.markdown("🟢 Actif" if active else "🔴 Inactif")
+                    else:
+                        st.markdown("❓")
+                except Exception:
+                    st.markdown("❓")
+            else:
+                st.markdown("⚪")
+        with col3:
+            st.caption(info["hook"])
+
+    st.divider()
+    st.subheader("Test rapide")
+    if st.button("🧪 Ping Routeur SMD"):
+        with st.spinner("Test en cours..."):
+            try:
+                r = requests.post(ROUTEUR_WEBHOOK, json={"instruction": "test ping"}, timeout=10)
+                if r.status_code in (200, 201, 202, 204):
+                    st.success(f"✅ Webhook opérationnel (HTTP {r.status_code})")
+                else:
+                    st.error(f"❌ HTTP {r.status_code}")
+            except Exception as e:
+                st.error(f"❌ {e}")
