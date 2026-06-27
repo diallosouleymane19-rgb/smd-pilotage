@@ -2,7 +2,7 @@
 Page Rapport IA — a inclure dans app.py a la place du bloc PAGE 5
 Ajouter ce code dans app.py juste avant la PAGE SYSTEME
 """
-
+ 
 # ─────────────────────────────────────────────
 # PAGE 5 — RAPPORT IA
 # ─────────────────────────────────────────────
